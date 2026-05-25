@@ -44,6 +44,7 @@ def fetch_all_data(start, end):
             
     if not df_res.empty:
         if "Yield_10Y" in df_res.columns and "Yield_2Y" in df_res.columns:
+            # 장단기 금리차 직접 연산
             df_res["Yield_Spread"] = df_res["Yield_10Y"] - df_res["Yield_2Y"]
         df_res = df_res.sort_index().ffill().bfill()
         
@@ -118,27 +119,15 @@ if not df_total.empty:
         else:
             st.info("금리차 데이터를 계산할 수 없습니다.")
 
-    # --- 💡 [새로 추가된 공정] 차트 아래 10일치 Daily 지표 목록 출력 ---
+    # --- 💡 [기능 대폭 확장] 차트 아래 최근 30 거래일 상세 요약 테이블 ---
     st.markdown("---")
-    st.subheader("📋 최근 10 거래일 주요 지표 요약")
+    st.subheader("📋 최근 30 거래일 주요 지표 및 금리 상세 요약")
     
-    # 1. 최신 데이터 10개 추출 및 날짜 역순 정렬
-    df_recent = df_total.tail(10).sort_index(ascending=False)
+    # 1. 최신 데이터 30개 추출 및 날짜 역순 정렬 (10일 -> 30일 변경)
+    df_recent = df_total.tail(30).sort_index(ascending=False).copy()
     
-    # 2. 보기 편하게 날짜 인덱스 포맷 변경 (YYYY-MM-DD)
+    # 2. 날짜 인덱스 포맷팅 (YYYY-MM-DD)
     df_recent.index = df_recent.index.strftime('%Y-%m-%d')
     df_recent.index.name = "날짜 (Date)"
     
-    # 3. 소수점 자릿수 포맷팅 규칙 세팅
-    format_dict = {}
-    for col in df_recent.columns:
-        if "Yield" in col:  # 금리 지표는 소수점 3자리까지 표기
-            format_dict[col] = "{:.3f}%"
-        else:               # 주가지수 및 M2 통화량은 소수점 2자리 표기
-            format_dict[col] = "{:,.2f}"
-            
-    # 4. 모바일 최적화 웹 테이블로 출력
-    st.dataframe(df_recent.style.format(format_dict), use_container_width=True)
-
-else:
-    st.error("데이터 서버 지연. 브라우저를 새로고침(F5) 해주세요.")
+    # 3. 데이터 컬럼명 직관적으로 한
