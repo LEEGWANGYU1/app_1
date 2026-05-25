@@ -52,7 +52,7 @@ def fetch_all_data(start, end):
 with st.spinner("서버에서 금융 데이터를 동기화하는 중..."):
     df_total = fetch_all_data(start_str, end_str)
 
-# [수정 완료] 에러의 원인이었던 'direction' 속성을 완전히 제거했습니다.
+# Plotly 금융 차트 전용 기간 버튼 공통 설정
 range_buttons = dict(
     buttons=[
         dict(count=1, label="1M", step="month", stepmode="backward"),
@@ -65,18 +65,17 @@ range_buttons = dict(
     ],
     bgcolor="rgba(150, 200, 250, 0.15)",
     activecolor="rgba(150, 200, 250, 0.5)",
-    x=0, # 차트 왼쪽 정렬
-    y=1.1 # 차트 약간 위쪽에 배치하여 모바일 터치 영역 확보
+    x=0,
+    y=1.1
 )
 
-# 3. 차트 렌더링
+# 3. 차트 렌더링 영역
 if not df_total.empty:
     tab1, tab2, tab3 = st.tabs(["📈 주식 지수", "💵 미국 M2 통화량", "⚖️ 장단기 금리차"])
 
     with tab1:
         st.subheader("국내 및 미국 주요 지수 (나스닥 포함)")
         fig1 = go.Figure()
-        
         if "KOSPI" in df_total.columns: fig1.add_trace(go.Scatter(x=df_total.index, y=df_total['KOSPI'], name="코스피", line=dict(color='blue')))
         if "KOSDAQ" in df_total.columns: fig1.add_trace(go.Scatter(x=df_total.index, y=df_total['KOSDAQ'], name="코스닥", line=dict(color='lightblue')))
         if "S&P500" in df_total.columns: fig1.add_trace(go.Scatter(x=df_total.index, y=df_total['S&P500'], name="S&P500", line=dict(color='orange'), yaxis="y2"))
@@ -86,12 +85,11 @@ if not df_total.empty:
             fig1.update_layout(
                 yaxis=dict(title="국내 지수 (포인트)"), 
                 yaxis2=dict(title="미국 지수 (포인트)", overlaying="y", side="right"), 
-                hovermode="x unified",
-                xaxis=dict(rangeselector=range_buttons)
+                hovermode="x unified", xaxis=dict(rangeselector=range_buttons)
             )
             st.plotly_chart(fig1, use_container_width=True)
         except Exception as e:
-            st.error(f"차트 1 렌더링 오류가 발생했습니다: {e}")
+            st.error(f"차트 1 렌더링 오류: {e}")
 
     with tab2:
         st.subheader("미국 M2 통화량 추이")
@@ -119,5 +117,28 @@ if not df_total.empty:
                 st.error(f"차트 3 렌더링 오류: {e}")
         else:
             st.info("금리차 데이터를 계산할 수 없습니다.")
+
+    # --- 💡 [새로 추가된 공정] 차트 아래 10일치 Daily 지표 목록 출력 ---
+    st.markdown("---")
+    st.subheader("📋 최근 10 거래일 주요 지표 요약")
+    
+    # 1. 최신 데이터 10개 추출 및 날짜 역순 정렬
+    df_recent = df_total.tail(10).sort_index(ascending=False)
+    
+    # 2. 보기 편하게 날짜 인덱스 포맷 변경 (YYYY-MM-DD)
+    df_recent.index = df_recent.index.strftime('%Y-%m-%d')
+    df_recent.index.name = "날짜 (Date)"
+    
+    # 3. 소수점 자릿수 포맷팅 규칙 세팅
+    format_dict = {}
+    for col in df_recent.columns:
+        if "Yield" in col:  # 금리 지표는 소수점 3자리까지 표기
+            format_dict[col] = "{:.3f}%"
+        else:               # 주가지수 및 M2 통화량은 소수점 2자리 표기
+            format_dict[col] = "{:,.2f}"
+            
+    # 4. 모바일 최적화 웹 테이블로 출력
+    st.dataframe(df_recent.style.format(format_dict), use_container_width=True)
+
 else:
     st.error("데이터 서버 지연. 브라우저를 새로고침(F5) 해주세요.")
