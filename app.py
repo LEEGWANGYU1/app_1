@@ -22,41 +22,48 @@ end_str = end_date.strftime('%Y-%m-%d')
 status_text = st.empty()
 status_text.info("🔄 데이터를 수집하는 중입니다. 잠시만 기다려주세요...")
 
-# 2. 데이터 수집 공정 (안전한 순차적 수집)
 df_total = pd.DataFrame()
 
 try:
     # A. 야후 파이낸스에서 증시 지수 수집
-    status_text.info("📈 1/3 단계: 국내 및 미국 주식 지수를 가져오는 중...")
+    status_text.info("📈 1/2 단계: 국내 및 미국 주식 지수를 가져오는 중...")
     tickers = {"KOSPI": "^KS11", "KOSDAQ": "^KQ11", "S&P500": "^GSPC"}
     
     for name, ticker in tickers.items():
         data = yf.download(ticker, start=start_str, end=end_str, progress=False)
         if not data.empty:
-            # MultiIndex 또는 SingleIndex 대응 안전장치
             if isinstance(data.columns, pd.MultiIndex):
                 df_total[name] = data['Close'][ticker]
             else:
                 df_total[name] = data['Close']
 
-    # B. FRED 경제 지표 수집 (가장 안전한 직접 URL 다운로드 방식 도입)
-    status_text.info("💵 2/3 단계: 한/미 M2 통화량 및 금리차 데이터를 가져오는 중...")
+    # B. FRED 경제 지표 수집 (에러 원천 차단 버전)
+    status_text.info("💵 2/2 단계: 한/미 M2 통화량 및 금리차 데이터를 가져오는 중...")
     fred_tickers = {"US_M2": "M2SL", "KR_M2": "M2MSB156N", "Yield_Spread": "T10Y2Y"}
     
     for name, f_ticker in fred_tickers.items():
         fred_url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={f_ticker}"
-        fred_df = pd.read_csv(fred_url, parse_dates=['DATE'], index_col='DATE')
         
-        # 숫자가 아닌 값(결측치 '.') 처리 및 데이터 타입 변환
-        fred_df[f_ticker] = pd.to_numeric(fred_df[f_ticker], errors='coerce')
+        # [수정 포인트] parse_dates를 제거하고 일단 읽어온 뒤 날짜 컬럼을 유연하게 처리
+        fred_df = pd.read_csv(fred_url)
         
-        # 원하는 기간 추출 및 전방 복사(ffill)로 일별 데이터화
-        fred_df = fred_df.loc[start_str:end_str]
-        df_total[name] = fred_df[f_ticker]
+        # 컬럼명을 모두 대문자로 통일하여 'DATE' 유실 문제 방지
+        fred_df.columns = [col.upper() for col in fred_df.columns]
+        
+        if 'DATE' in fred_df.columns:
+            fred_df['DATE'] = pd.to_datetime(fred_df['DATE'])
+            fred_df.set_index('DATE', inplace=True)
+            
+            # 숫자가 아닌 값 처리 및 데이터 타입 변환
+            fred_df[f_ticker] = pd.to_numeric(fred_df[f_ticker], errors='coerce')
+            
+            # 데이터 병합
+            df_total[name] = fred_df[f_ticker]
 
     # C. 데이터 정제 (주말 및 공휴일 결측치 전방 복사)
-    status_text.info("⚙️ 3/3 단계: 수집된 데이터를 통합 및 정제하는 중...")
-    df_total = df_total.sort_index().ffill().bfill()
+    if not df_total.empty:
+        df_total = df_total.sort_index().loc[start_str:end_str]
+        df_total = df_total.ffill().bfill()
     
     # 상태 메시지 삭제
     status_text.empty()
