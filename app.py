@@ -6,8 +6,9 @@ import plotly.graph_objects as go
 
 # 1. 페이지 설정
 st.set_page_config(page_title="Global Dashboard", layout="wide")
-st.title("📊 글로벌 금융 지표 대시보드")
-st.caption("모든 지표를 야후 파이낸스 망을 통해 안전하게 수집합니다.")
+
+# [요구사항 반영] 타이틀 글자 크기를 모바일용으로 슬림하게 줄였습니다.
+st.markdown("### 📊 금융 지표 대시보드")
 
 # 기간 설정 (기본 시작일 2015년)
 st.sidebar.header("📅 데이터 수집 기간")
@@ -44,7 +45,6 @@ def fetch_all_data(start, end):
             
     if not df_res.empty:
         if "Yield_10Y" in df_res.columns and "Yield_2Y" in df_res.columns:
-            # 장단기 금리차 직접 연산
             df_res["Yield_Spread"] = df_res["Yield_10Y"] - df_res["Yield_2Y"]
         df_res = df_res.sort_index().ffill().bfill()
         
@@ -72,10 +72,10 @@ range_buttons = dict(
 
 # 3. 차트 렌더링 영역
 if not df_total.empty:
-    tab1, tab2, tab3 = st.tabs(["📈 주식 지수", "💵 미국 M2 통화량", "⚖️ 장단기 금리차"])
+    tab1, tab2, tab3 = st.tabs(["📈 주식 지수", "💵 미국 M2", "⚖️ 금리차"])
 
     with tab1:
-        st.subheader("국내 및 미국 주요 지수 (나스닥 포함)")
+        st.subheader("국내 및 미국 주요 지수")
         fig1 = go.Figure()
         if "KOSPI" in df_total.columns: fig1.add_trace(go.Scatter(x=df_total.index, y=df_total['KOSPI'], name="코스피", line=dict(color='blue')))
         if "KOSDAQ" in df_total.columns: fig1.add_trace(go.Scatter(x=df_total.index, y=df_total['KOSDAQ'], name="코스닥", line=dict(color='lightblue')))
@@ -84,13 +84,13 @@ if not df_total.empty:
         
         try:
             fig1.update_layout(
-                yaxis=dict(title="국내 지수 (포인트)"), 
-                yaxis2=dict(title="미국 지수 (포인트)", overlaying="y", side="right"), 
+                yaxis=dict(title="국내 지수"), 
+                yaxis2=dict(title="미국 지수", overlaying="y", side="right"), 
                 hovermode="x unified", xaxis=dict(rangeselector=range_buttons)
             )
             st.plotly_chart(fig1, use_container_width=True)
         except Exception as e:
-            st.error(f"차트 1 렌더링 오류: {e}")
+            st.error(f"차트 1 오류: {e}")
 
     with tab2:
         st.subheader("미국 M2 통화량 추이")
@@ -101,33 +101,48 @@ if not df_total.empty:
                 fig2.update_layout(hovermode="x unified", xaxis=dict(rangeselector=range_buttons))
                 st.plotly_chart(fig2, use_container_width=True)
             except Exception as e:
-                st.error(f"차트 2 렌더링 오류: {e}")
+                st.error(f"차트 2 오류: {e}")
         else:
-            st.info("M2 통화량 데이터를 불러오는 중입니다.")
+            st.info("M2 데이터를 불러오는 중입니다.")
 
     with tab3:
-        st.subheader("미국 국채 장단기 금리차 추정치")
+        st.subheader("미국 국채 장단기 금리차 (10Y - 2Y)")
         if "Yield_Spread" in df_total.columns:
             fig3 = go.Figure()
             fig3.add_trace(go.Scatter(x=df_total.index, y=df_total['Yield_Spread'], name="10Y - 2Y 차이", line=dict(color='red')))
             fig3.add_hline(y=0.0, line_dash="dash", line_color="gray")
             try:
-                fig3.update_layout(yaxis=dict(title="금리차 (포인트)"), hovermode="x unified", xaxis=dict(rangeselector=range_buttons))
+                fig3.update_layout(yaxis=dict(title="금리차"), hovermode="x unified", xaxis=dict(rangeselector=range_buttons))
                 st.plotly_chart(fig3, use_container_width=True)
             except Exception as e:
-                st.error(f"차트 3 렌더링 오류: {e}")
+                st.error(f"차트 3 오류: {e}")
         else:
             st.info("금리차 데이터를 계산할 수 없습니다.")
 
-    # --- 💡 [기능 대폭 확장] 차트 아래 최근 30 거래일 상세 요약 테이블 ---
+    # --- 💡 하단 30 거래일 일별 기록 리스트업 ---
     st.markdown("---")
-    st.subheader("📋 최근 30 거래일 주요 지표 및 금리 상세 요약")
+    st.markdown("#### 📋 최근 30 거래일 상세 기록")
     
-    # 1. 최신 데이터 30개 추출 및 날짜 역순 정렬 (10일 -> 30일 변경)
+    # 데이터 가공
     df_recent = df_total.tail(30).sort_index(ascending=False).copy()
-    
-    # 2. 날짜 인덱스 포맷팅 (YYYY-MM-DD)
     df_recent.index = df_recent.index.strftime('%Y-%m-%d')
-    df_recent.index.name = "날짜 (Date)"
+    df_recent.index.name = "날짜"
     
-    # 3. 데이터 컬럼명 직관적으로 한
+    rename_rules = {
+        "KOSPI": "코스피", "KOSDAQ": "코스닥", "S&P500": "S&P500", "NASDAQ": "나스닥",
+        "US_M2": "미국 M2", "Yield_10Y": "국채 10Y", "Yield_2Y": "국채 2Y", "Yield_Spread": "금리차"
+    }
+    df_recent.rename(columns=rename_rules, inplace=True)
+    
+    format_dict = {}
+    for col in df_recent.columns:
+        if "국채" in col or "금리차" in col:
+            format_dict[col] = "{:.3f}%"
+        else:
+            format_dict[col] = "{:,.2f}"
+            
+    # [수정 완료] st.dataframe을 st.table로 변경하여 가두어짐 없이 30일치가 모바일 화면에 쭉 나열됩니다.
+    st.table(df_recent.style.format(format_dict))
+
+else:
+    st.error("데이터 서버 지연. 브라우저를 새로고침 해주세요.")
