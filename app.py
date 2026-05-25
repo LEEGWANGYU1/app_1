@@ -52,7 +52,7 @@ def fetch_all_data(start, end):
 with st.spinner("서버에서 금융 데이터를 동기화하는 중..."):
     df_total = fetch_all_data(start_str, end_str)
 
-# [수정 포인트] 최신 Plotly 규격에 맞춰 엄격하고 안전하게 버튼 구조 재정의
+# [수정 완료] 에러의 원인이었던 'direction' 속성을 완전히 제거했습니다.
 range_buttons = dict(
     buttons=[
         dict(count=1, label="1M", step="month", stepmode="backward"),
@@ -63,9 +63,10 @@ range_buttons = dict(
         dict(count=10, label="10Y", step="year", stepmode="backward"),
         dict(step="all", label="ALL")
     ],
-    bgcolor="rgba(150, 200, 250, 0.2)",
-    activecolor="rgba(150, 200, 250, 0.6)",
-    direction="left"
+    bgcolor="rgba(150, 200, 250, 0.15)",
+    activecolor="rgba(150, 200, 250, 0.5)",
+    x=0, # 차트 왼쪽 정렬
+    y=1.1 # 차트 약간 위쪽에 배치하여 모바일 터치 영역 확보
 )
 
 # 3. 차트 렌더링
